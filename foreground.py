@@ -86,7 +86,7 @@ for img_path in tqdm(image_paths, desc="Đang xử lý"):
     # Lấy tên file gốc
     filename = os.path.basename(img_path)
     name_no_ext = os.path.splitext(filename)[0]
-    output_filename = f"{name_no_ext}_mask.png
+    output_filename = f"{name_no_ext}_mask.png"
     output_path = os.path.join(OUTPUT_DIR, output_filename)
     
     if os.path.exists(output_path):
