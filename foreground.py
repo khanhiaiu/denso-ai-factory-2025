@@ -10,7 +10,7 @@ from tqdm import tqdm
 
 INPUT_DIR = r"/kaggle/input/hackathon-2025"
 
-OUTPUT_DIR = r"/kaggle/working/"
+OUTPUT_DIR = r"/kaggle/working/denso-ai-factory-2025/datasets/RealIAD/PCB5/DISthresh/good"
 
 CHECKPOINT_PATH = "sam_vit_h_4b8939.pth" 
 
