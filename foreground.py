@@ -41,7 +41,7 @@ sam.to(device=DEVICE)
 
 mask_generator = SamAutomaticMaskGenerator(
     model=sam,
-    points_per_side=12        # Quét 32x32 điểm lưới
+    points_per_side=12,       # Quét 32x32 điểm lưới
     pred_iou_thresh=0.88,         # Lọc mask chất lượng kém
     stability_score_thresh=0.95,  # Lọc mask không ổn định
     crop_n_layers=0,              # Tắt crop để nhanh hơn
