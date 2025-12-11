@@ -8,9 +8,9 @@ import sys
 from segment_anything import sam_model_registry, SamAutomaticMaskGenerator
 from tqdm import tqdm
 
-INPUT_DIR = r"path/to/your/images/train/good" 
+INPUT_DIR = r"/kaggle/input/hackathon-2025"
 
-OUTPUT_DIR = r"path/to/save/DISthresh/good"
+OUTPUT_DIR = r"/kaggle/working/Denso/PCB5/DISthresh/good"
 
 CHECKPOINT_PATH = "sam_vit_h_4b8939.pth" 
 
