@@ -409,14 +409,14 @@ class RealIADTestDataset(Dataset):
     def __init__(self, data_path, classname, img_size):
         # data_path already includes RealIAD/classname, just add test
         self.root_dir = os.path.join(data_path, 'test')
-        self.images = sorted(glob.glob(self.root_dir + "/*/*.jpg"))
+        self.images = sorted(glob.glob(self.root_dir + "/*/*.png"))
         self.resize_shape = [img_size[0], img_size[1]]
 
     def __len__(self):
         return len(self.images)
 
     def transform_image(self, image_path, mask_path):
-        image = cv2.cvtColor(cv2.imread(image_path), cv2.COLOR_BGR2RGB)
+        image = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
         if mask_path is not None:
             mask = cv2.imread(mask_path, cv2.IMREAD_GRAYSCALE)
         else:
@@ -428,7 +428,10 @@ class RealIADTestDataset(Dataset):
         image = image / 255.0
         mask = mask / 255.0
 
+        # Expand dims to (H, W, 1) BEFORE transpose
+        image = np.expand_dims(image, axis=2)
         image = np.transpose(np.array(image).astype(np.float32), (2, 0, 1))
+        
         mask = np.transpose(np.expand_dims(np.array(mask).astype(np.float32), axis=2), (2, 0, 1))
         return image, mask
 
@@ -457,7 +460,7 @@ class RealIADTrainDataset(Dataset):
         self.resize_shape = [img_size[0], img_size[1]]
         self.anomaly_source_path = args["anomaly_source_path"]
 
-        self.image_paths = sorted(glob.glob(self.root_dir + "/*.jpg"))
+        self.image_paths = sorted(glob.glob(self.root_dir + "/*.png"))
         self.anomaly_source_paths = sorted(glob.glob(self.anomaly_source_path + "/images/*/*.jpg"))
         
         # Cache for preprocessed data
@@ -472,7 +475,7 @@ class RealIADTrainDataset(Dataset):
             A.RandomGamma(gamma_limit=(50, 200), p=1.0),
             A.RandomBrightnessContrast(brightness_limit=0.2, contrast_limit=0.2, p=1.0),
             A.Sharpen(alpha=(0.2, 0.5), lightness=(0.5, 1.0), p=1.0),
-            A.HueSaturationValue(hue_shift_limit=50, sat_shift_limit=50, val_shift_limit=0, p=1.0),
+            # HSV removed for grayscale
             A.Solarize(threshold=128, p=1.0),
             A.Posterize(num_bits=4, p=1.0),
             A.InvertImg(p=1.0),
@@ -490,7 +493,7 @@ class RealIADTrainDataset(Dataset):
         # Thêm _mask vào tên file
         base_name = os.path.basename(foreground_path)
         name_without_ext = os.path.splitext(base_name)[0]
-        mask_name = f"{name_without_ext}_mask.jpg"
+        mask_name = f"{name_without_ext}_mask.png"
         foreground_path = os.path.join(os.path.dirname(foreground_path), mask_name)
         return foreground_path
 
@@ -536,9 +539,11 @@ class RealIADTrainDataset(Dataset):
             
             if self.classname in texture_list: # only DTD
                 aug = self.randAugmenter()
-                anomaly_source_img = cv2.cvtColor(cv2.imread(anomaly_source_path),cv2.COLOR_BGR2RGB)
+                anomaly_source_img = cv2.imread(anomaly_source_path, cv2.IMREAD_GRAYSCALE)
                 anomaly_source_img = cv2.resize(anomaly_source_img, dsize=(
                     self.resize_shape[1], self.resize_shape[0]))
+                anomaly_source_img = np.expand_dims(anomaly_source_img, axis=2)
+                
                 anomaly_img_augmented = aug(image=anomaly_source_img)['image']
                 img_object_thr = anomaly_img_augmented.astype(
                     np.float32) * object_perlin/255.0
@@ -546,9 +551,11 @@ class RealIADTrainDataset(Dataset):
                 texture_or_patch = torch.rand(1).numpy()[0]
                 if texture_or_patch > 0.5:  # >0.5 is DTD 
                     aug = self.randAugmenter()
-                    anomaly_source_img = cv2.cvtColor(cv2.imread(anomaly_source_path),cv2.COLOR_BGR2RGB)
+                    anomaly_source_img = cv2.imread(anomaly_source_path, cv2.IMREAD_GRAYSCALE)
                     anomaly_source_img = cv2.resize(anomaly_source_img, dsize=(
                         self.resize_shape[1], self.resize_shape[0]))
+                    anomaly_source_img = np.expand_dims(anomaly_source_img, axis=2)
+
                     anomaly_img_augmented = aug(image=anomaly_source_img)['image']
                     img_object_thr = anomaly_img_augmented.astype(
                         np.float32) * object_perlin/255.0
@@ -592,8 +599,9 @@ class RealIADTrainDataset(Dataset):
         if self._cache_enabled and image_path in self._image_cache:
             return self._image_cache[image_path]
         
-        image = cv2.cvtColor(cv2.imread(image_path), cv2.COLOR_BGR2RGB)
+        image = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
         image = cv2.resize(image, dsize=(self.resize_shape[1], self.resize_shape[0]))
+        image = np.expand_dims(image, axis=2) # (H,W,1)
         
         if self._cache_enabled:
             self._image_cache[image_path] = image

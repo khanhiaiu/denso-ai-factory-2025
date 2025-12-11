@@ -187,7 +187,7 @@ def train(training_dataset_loader, testing_dataset_loader, args, data_len,sub_cl
             loss_type=args['loss-type'], noise=args["noise_fn"], img_channels=in_channels
             )
 
-    seg_model=SegmentationSubNetwork(in_channels=6, out_channels=1).to(device)
+    seg_model=SegmentationSubNetwork(in_channels=in_channels * 2, out_channels=1).to(device)
 
     use_gradient_checkpointing = args.get('use_gradient_checkpointing', True)
     if use_gradient_checkpointing:

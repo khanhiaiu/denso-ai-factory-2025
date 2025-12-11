@@ -20,7 +20,7 @@
   "num_heads": 4,
   "num_head_channels": -1,
   "noise_fn": "gauss",
-  "channels": 3,
+  "channels": 1,
   "data_name": "RealIAD",
   "data_root_path": "/kaggle/input/pcb-dataset",
   "anomaly_source_path": "/kaggle/input/pcb-dataset/dtd",
