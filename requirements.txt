@@ -31,5 +31,4 @@ git+https://github.com/facebookresearch/segment-anything.git\
 
 #https://www.kaggle.com/datasets/nguyenkhanhai/dtd-dataset
 #https://github.com/khanhiaiu/denso-ai-factory-2025.git
-
-
+#123
