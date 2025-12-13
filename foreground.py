@@ -8,7 +8,7 @@ import sys
 from segment_anything import sam_model_registry, SamAutomaticMaskGenerator
 from tqdm import tqdm
 
-INPUT_DIR = r"/kaggle/input/hackathon-2025"
+INPUT_DIR = r"/kaggle/working/denso-ai-factory-2025/datasets/RealIAD/PCB5/train/good"
 
 OUTPUT_DIR = r"/kaggle/working/denso-ai-factory-2025/datasets/RealIAD/PCB5/DISthresh/good"
 
