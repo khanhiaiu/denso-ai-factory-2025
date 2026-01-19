@@ -524,7 +524,7 @@ def main():
         
         
         # Image upload
-        uploaded_file = st.file_uploader(
+        uploaded_file = st.sidebar.file_uploader(
             "Upload an image for anomaly detection",
             type=['png', 'jpg', 'jpeg']
         )
