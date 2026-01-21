@@ -21,6 +21,7 @@ from collections import defaultdict
 import time
 import tempfile
 import shutil
+import glob
 
 # Add src directory to path
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'src'))
@@ -435,6 +436,178 @@ def batch_analysis_page(models):
                 mime="text/csv"
             )
 
+def live_monitor_page(models):
+    """Live Folder Monitor page"""
+    st.header("Live Folder Monitor")
+    
+    if models is None:
+        st.warning("Please load a model from the sidebar first.")
+        return
+
+    st.markdown("Monitors a folder for new images, automatically crops them to `(751, 0, 3072, 2048)`, and performs anomaly detection.")
+
+    # Monitor configuration
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        # Default to current directory or previously used
+        default_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "datasets"))
+        if not os.path.exists(default_dir):
+            default_dir = os.getcwd()
+            
+        input_dir = st.text_input("Folder path to monitor:", value=default_dir)
+    with col2:
+        threshold = st.number_input("Anomaly Threshold", 0.0, 1.0, 0.6, step=0.01)
+
+    # State init
+    if 'monitoring' not in st.session_state:
+        st.session_state.monitoring = False
+    if 'processed_files' not in st.session_state:
+        st.session_state.processed_files = set()
+    if 'monitor_start_time' not in st.session_state:
+        st.session_state.monitor_start_time = time.time()
+
+    # Controls
+    col_start, col_stop = st.columns([1, 1])
+    with col_start:
+        start_disabled = st.session_state.monitoring
+        if st.button("Start Monitoring", type="primary", disabled=start_disabled):
+            if not os.path.exists(input_dir):
+                st.error(f"Directory not found: {input_dir}")
+            else:
+                st.session_state.monitoring = True
+                st.session_state.monitor_start_time = time.time()
+                
+                # Pre-populate with existing files so we don't process them
+                current_files = []
+                image_extensions = {'.png', '.jpg', '.jpeg', '.bmp', '.tiff'}
+                for ext in image_extensions:
+                    current_files.extend(glob.glob(os.path.join(input_dir, f"*{ext}")))
+                    current_files.extend(glob.glob(os.path.join(input_dir, f"*{ext.upper()}")))
+                
+                st.session_state.processed_files = set(current_files)
+                st.rerun()
+    
+    with col_stop:
+        stop_disabled = not st.session_state.monitoring
+        if st.button("Stop Monitoring", type="secondary", disabled=stop_disabled):
+            st.session_state.monitoring = False
+            st.rerun()
+
+    st.divider()
+
+    # Layout for results (Persistent containers)
+    status_container = st.empty()
+    metrics_container = st.container()
+    
+    # Grid for images - Create the layout once
+    row1_col1, row1_col2 = st.columns(2)
+    row2_col1, row2_col2 = st.columns(2)
+    
+    # Placeholders
+    with row1_col1:
+        st.markdown("**Original Crop**")
+        img_place_1 = st.empty()
+    with row1_col2:
+        st.markdown("**Anomaly Mask**")
+        img_place_2 = st.empty()
+    with row2_col1:
+        st.markdown("**Reconstruction**")
+        img_place_3 = st.empty()
+    with row2_col2:
+        st.markdown("**Heat Map**")
+        img_place_4 = st.empty()
+
+    # Monitoring Loop
+    if st.session_state.monitoring:
+        status_container.info(f"Monitoring: {input_dir}...")
+        
+        # Crop box from requirements
+        CROP_BOX = (751, 0, 3072, 2048)
+        image_extensions = {'.png', '.jpg', '.jpeg', '.bmp', '.tiff'}
+        
+        try:
+             # Scan loop
+            while st.session_state.monitoring:
+                # Check for stop signal from UI interaction (although difficult in loop without rerun)
+                # We rely on the rerun from stop button to break this, but a small sleep helps responsiveness
+                
+                # Find new files
+                candidate_files = []
+                for ext in image_extensions:
+                    candidate_files.extend(glob.glob(os         .path.join(input_dir, f"*{ext}")))
+                    candidate_files.extend(glob.glob(os.path.join(input_dir, f"*{ext.upper()}")))
+                
+                new_files = []
+                for fpath in candidate_files:
+                    if fpath not in st.session_state.processed_files:
+                        # Found a new file!
+                        new_files.append((fpath, os.path.getmtime(fpath)))
+                
+                # Sort by time to process oldest new file first
+                new_files.sort(key=lambda x: x[1])
+                
+                if new_files:
+                    target_file, _ = new_files[0]
+                    status_container.warning(f"Processing: {os.path.basename(target_file)}...")
+                    
+                    try:
+                        # Process
+                        img = Image.open(target_file)
+                        cropped_img = img.crop(CROP_BOX)
+                        image_array = np.array(cropped_img)
+                        
+                        # Handle channels
+                        if image_array.ndim == 2:
+                             image_array = cv2.cvtColor(image_array, cv2.COLOR_GRAY2RGB)
+                        elif image_array.shape[2] == 4:
+                             image_array = cv2.cvtColor(image_array, cv2.COLOR_RGBA2RGB)
+                        
+                        # Predict
+                        result = predict_single_image(models, image_array, heatmap_threshold=threshold)
+                        
+                        # Update Metrics
+                        is_anomaly = result['is_anomaly']
+                        status_text = "ANOMALY" if is_anomaly else "NORMAL"
+                        color = "red" if is_anomaly else "green"
+                        
+                        # Clear previous metrics and write new ones
+                        with metrics_container:
+                            # We need to recreate columns inside the container to overwrite cleanly
+                            mc1, mc2, mc3, mc4 = st.columns(4)
+                            mc1.metric("Filename", os.path.basename(target_file))
+                            mc2.metric("Score", f"{result['anomaly_score']:.4f}")
+                            mc3.markdown(f"<h3 style='color: {color}; margin:0;'>{status_text}</h3>", unsafe_allow_html=True)
+                            mc4.metric("Latency", f"{result.get('inference_time', 0)*1000:.0f} ms")
+
+                        # Update Images - reusing create_zoomable_img
+                        img_place_1.plotly_chart(create_zoomable_img(image_array), use_container_width=True)
+                        
+                        if 'anomaly_mask' in result:
+                            img_place_2.plotly_chart(create_zoomable_img(result['anomaly_mask']), use_container_width=True)
+                        if 'reconstructed_image' in result:
+                            img_place_3.plotly_chart(create_zoomable_img(result['reconstructed_image']), use_container_width=True)
+                        if 'heatmap_overlay' in result:
+                            img_place_4.plotly_chart(create_zoomable_img(result['heatmap_overlay']), use_container_width=True)
+                        
+                        # Mark as processed
+                        st.session_state.processed_files.add(target_file)
+                        
+                        status_container.success(f"Processed: {os.path.basename(target_file)}")
+                        
+                    except Exception as e:
+                         status_container.error(f"Error processing {os.path.basename(target_file)}: {e}")
+                         # Mark as processed so we don't get stuck on one bad file
+                         st.session_state.processed_files.add(target_file) 
+                
+                else:
+                    status_container.info(f"Monitoring {input_dir}... Waiting for new images...")
+                
+                time.sleep(1) # Wait 1s before next scan
+                
+        except Exception as e:
+            st.error(f"Monitoring Loop Error: {e}")
+            st.session_state.monitoring = False
+
 def main():
     """Main application"""
     # Title
@@ -509,7 +682,7 @@ def main():
 
     # Main Page Content
     st.sidebar.markdown("---")
-    page = st.sidebar.selectbox("Select Page", ["Single Image Analysis", "Batch Analysis"])
+    page = st.sidebar.selectbox("Select Page", ["Single Image Analysis", "Batch Analysis", "Live Folder Monitor"])
     
     if page == "Single Image Analysis":
         if not st.session_state.models:
@@ -620,6 +793,9 @@ def main():
     
     elif page == "Batch Analysis":
         batch_analysis_page(st.session_state.models)
+        
+    elif page == "Live Folder Monitor":
+        live_monitor_page(st.session_state.models)
     
     # Footer
     st.markdown("---")
