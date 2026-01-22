@@ -29,7 +29,7 @@ import sys
 from utils import BinaryFocalLoss
 
 # Global ROI mask configuration
-ROI_MASK_PATH = 'test1/expanded_black_10px.png'
+ROI_MASK_PATH = 'test1/expanded_black_30px.png'
 roi_mask = None
 
 def get_roi_mask(device, target_shape):
