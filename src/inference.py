@@ -28,6 +28,39 @@ from skimage.measure import label, regionprops
 import sys
 from utils import BinaryFocalLoss
 
+# Global ROI mask configuration
+ROI_MASK_PATH = 'test1/expanded_black_10px.png'
+roi_mask = None
+
+def get_roi_mask(device, target_shape):
+    """
+    Lazy load and resize ROI mask.
+    target_shape: (H, W) or (B, C, H, W)
+    """
+    global roi_mask
+    if roi_mask is None and os.path.exists(ROI_MASK_PATH):
+        try:
+            mask_img = cv2.imread(ROI_MASK_PATH, cv2.IMREAD_GRAYSCALE)
+            if mask_img is not None:
+                # Get H, W from target_shape
+                if len(target_shape) == 2:
+                    H, W = target_shape
+                else: 
+                     _, _, H, W = target_shape
+                     
+                mask_img = cv2.resize(mask_img, (W, H))
+                # Normalize to [0, 1]
+                mask_tensor = torch.from_numpy(mask_img.astype(np.float32) / 255.0)
+                # (1, 1, H, W)
+                roi_mask = mask_tensor.unsqueeze(0).unsqueeze(0)
+                print(f"ROI mask loaded from {ROI_MASK_PATH}")
+        except Exception as e:
+            print(f"Failed to load ROI mask: {e}")
+            
+    if roi_mask is not None:
+         return roi_mask.to(device)
+    return None
+
 def preprocess_image(image_path, img_size=(256, 256), channels=3):
     image = cv2.imread(image_path)
     if channels == 1:
@@ -139,6 +172,12 @@ def predict(unet_model, seg_model, ddpm, image_tensor, args, device='cpu', heatm
         pred_mask_logits = seg_model(torch.cat((image_tensor, pred_x_0_condition), dim=1))
             
     pred_mask = torch.sigmoid(pred_mask_logits)
+    
+    # Apply ROI mask
+    current_roi = get_roi_mask(device, image_tensor.shape)
+    if current_roi is not None:
+        pred_mask = pred_mask * current_roi
+        
     out_mask = pred_mask
 
     # Tính điểm anomaly
@@ -300,6 +339,12 @@ def predict_batch(unet_model, seg_model, ddpm, image_arrays, args, device='cpu',
         batch_inference_time = time.time() - inference_start
         
         pred_mask = torch.sigmoid(pred_mask_logits)
+        
+        # Apply ROI mask
+        current_roi = get_roi_mask(device, batch_tensor.shape)
+        if current_roi is not None:
+             pred_mask = pred_mask * current_roi
+             
         out_mask = pred_mask
         
         # Process each image in batch (post-processing)
@@ -344,6 +389,12 @@ def predict_single_tensor(unet_model, seg_model, ddpm, image_tensor, args, devic
         pred_mask_logits = seg_model(torch.cat((image_tensor, pred_x_0_condition), dim=1))
             
     pred_mask = torch.sigmoid(pred_mask_logits)
+    
+    # Apply ROI mask
+    current_roi = get_roi_mask(device, image_tensor.shape)
+    if current_roi is not None:
+        pred_mask = pred_mask * current_roi
+        
     out_mask = pred_mask
 
     # Calculate anomaly score
@@ -500,6 +551,9 @@ if __name__ == "__main__":
     seg_model.load_state_dict(ckpt_state['seg_model_state_dict'])
     unet_model.eval()
     seg_model.eval()
+    
+    # Pre-load ROI mask for main execution
+    get_roi_mask(device, (args['img_size'][0], args['img_size'][1]))
 
 
     # 5. Chạy predict

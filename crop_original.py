@@ -2,8 +2,8 @@ import os
 from PIL import Image
 
 # Đường dẫn thư mục input và output
-input_dir = "datasets/DENSO/mat_truc/ground_truth1"
-output_dir = "datasets/DENSO/mat_truc/ground_truth"
+input_dir = "testdemo"
+output_dir = "test1"
 # Tạo thư mục output nếu chưa có
 os.makedirs(output_dir, exist_ok=True)
 

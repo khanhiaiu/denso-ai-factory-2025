@@ -549,7 +549,13 @@ def live_monitor_page(models):
                 if new_files:
                     target_file, _ = new_files[0]
                     status_container.warning(f"Processing: {os.path.basename(target_file)}...")
-                    
+                    first_size = -1
+                    while True:
+                        curr_size = os.path.getsize(target_file)
+                        if curr_size == first_size and curr_size > 0:
+                            break
+                        first_size = curr_size
+                        time.sleep(0.05)
                     try:
                         # Process
                         img = Image.open(target_file)
@@ -601,8 +607,7 @@ def live_monitor_page(models):
                 
                 else:
                     status_container.info(f"Monitoring {input_dir}... Waiting for new images...")
-                
-                time.sleep(1) # Wait 1s before next scan
+                    time.sleep(0.05)
                 
         except Exception as e:
             st.error(f"Monitoring Loop Error: {e}")
